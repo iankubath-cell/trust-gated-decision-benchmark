@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large data files
+data/
+*.csv
+*.pkl
+*.pickle
+
+# Results and models (commit only summary figures)
+results/
+models/
+
+# Logs
+*.log
+logs/
+
+# Local config
+.env
+.local_settings.py
