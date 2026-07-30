@@ -85,13 +85,12 @@ def sample_trial_config(bench_config: BenchmarkConfig,
     
     # Clip to valid range
     coin_bias_prior = np.clip(coin_bias_prior, 0.01, 0.99)
-    
     return TrialConfig(
         coin_bias_true=coin_bias_true,
         coin_bias_prior=coin_bias_prior,
         effect_strength=effect_strength,
-        alpha=bench_config.random_seed,  # Keep alpha/beta fixed
-        beta=0.05,
+        alpha=0.05,                            # FIXED: Type I error rate
+        beta=0.05,                             # FIXED: Type II error rate
         max_steps=bench_config.tosses_per_trial,
         random_seed=bench_config.random_seed + trial_idx,
     )
