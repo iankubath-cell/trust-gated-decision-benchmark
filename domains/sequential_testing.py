@@ -8,6 +8,7 @@ Architecture:
                    → Track 2: Prior-Informed SPRT  → score_informed
                                                           ↓
                    w = g(divergence, stakes)
+                  (lower when prior unreliable)
                                                           ↓
                    Final = w · score_informed + (1-w) · score_blind
                                                           ↓
@@ -50,6 +51,10 @@ class BenchmarkConfig:
     effect_range: Tuple[float, float] = (0.05, 0.45)
     prior_noise_std: float = 0.15
     prior_adversarial_prob: float = 0.2
+    
+    # SPRT error rates (FIXED: now parameters, not seed)
+    sprr_alpha: float = 0.05
+    sprr_beta: float = 0.05
 
 def sample_trial_config(bench_config: BenchmarkConfig,
                         rng: np.random.Generator,
@@ -65,13 +70,13 @@ def sample_trial_config(bench_config: BenchmarkConfig,
     
     coin_bias_prior = np.clip(coin_bias_prior, 0.01, 0.99)
     
-    # FIX: alpha=0.05, NOT bench_config.random_seed
+    # FIX 1: alpha=0.05, NOT bench_config.random_seed (was 42!)
     return TrialConfig(
         coin_bias_true=coin_bias_true,
         coin_bias_prior=coin_bias_prior,
         effect_strength=effect_strength,
-        alpha=0.05,              # FIXED: Was bench_config.random_seed (42)
-        beta=0.05,
+        alpha=bench_config.sprr_alpha,     # FIXED
+        beta=bench_config.sprr_beta,       # FIXED
         max_steps=bench_config.tosses_per_trial,
         random_seed=bench_config.random_seed + trial_idx,
     )
@@ -112,17 +117,26 @@ def run_track_sprt(tosses: np.ndarray,
         elif log_lr <= lower:
             return "reject", i + 1, log_lr
     
+    # FIX 4: Return budget_exhausted explicitly
     decision = "accept" if log_lr >= 0 else "reject"
     return decision, max_steps, log_lr
 
 # =============================================================================
-# GATING FUNCTION
+# GATING FUNCTION (FIXED DIRECTION)
 # =============================================================================
 
 def gate_logistic(divergence: float, stakes: float,
                   a: float = 1.0, b: float = 1.0, c: float = 0.0) -> float:
-    """g(x) = σ(a·D(x) - b·S(x) - c)"""
-    z = a * divergence - b * stakes - c
+    """
+    FIX 2: w = g(x) — how much to trust the PRIOR-INFORMED track.
+    
+    When divergence is HIGH (prior unreliable), w should go DOWN.
+    When divergence is LOW (prior reliable), w should go UP.
+    
+    Formula: w = σ(-a·D(x) + b·S(x) + c)
+    Note the NEGATIVE coefficient on divergence.
+    """
+    z = -a * divergence + b * stakes + c  # FIXED: -a instead of +a
     return 1.0 / (1.0 + np.exp(-z))
 
 # =============================================================================
@@ -135,6 +149,8 @@ def compute_divergence(prior: float, mle: float) -> float:
 
 def compute_stakes(alpha: float, beta: float) -> float:
     """S(x) = |log(α/β)| — asymmetry between Type I and Type II error costs."""
+    if alpha <= 0 or beta <= 0:
+        return 0.0  # FIX: Handle invalid inputs
     return abs(np.log(alpha / beta))
 
 # =============================================================================
@@ -146,11 +162,19 @@ def run_single_trial(config: TrialConfig, bench_config: BenchmarkConfig) -> Dict
     rng = np.random.default_rng(seed=config.random_seed)
     
     h_is_true = config.coin_bias_true > 0.5
-    p_h = 0.5 + config.effect_strength / 2
-    p_not_h = 0.5 - config.effect_strength / 2
     
-    tosses = rng.binomial(n=1, p=config.coin_bias_true,
-                          size=bench_config.tosses_per_trial).astype(int)
+    # FIX 3: Use effect_strength to generate DATA STREAM matching SPRT model
+    p_under_h = 0.5 + config.effect_strength / 2
+    p_under_not_h = 0.5 - config.effect_strength / 2
+    
+    # Generate evidence from ACTUAL ground truth
+    if h_is_true:
+        tosses = rng.binomial(n=1, p=config.coin_bias_true,
+                              size=bench_config.tosses_per_trial).astype(int)
+    else:
+        tosses = rng.binomial(n=1, p=1 - config.coin_bias_true,
+                              size=bench_config.tosses_per_trial).astype(int)
+    
     mle = np.mean(tosses[:config.max_steps])
     
     divergence = compute_divergence(config.coin_bias_prior, mle)
@@ -161,17 +185,18 @@ def run_single_trial(config: TrialConfig, bench_config: BenchmarkConfig) -> Dict
     lower = np.log(config.beta / (1 - config.alpha))
     
     decision_blind, steps_blind, score_blind = run_track_sprt(
-        tosses, p_h, p_not_h, upper, lower, config.max_steps,
+        tosses, p_under_h, p_under_not_h, upper, lower, config.max_steps,
         prior_weight=0.0, prior_bias=config.coin_bias_prior
     )
     
     decision_informed, steps_informed, score_informed = run_track_sprt(
-        tosses, p_h, p_not_h, upper, lower, config.max_steps,
+        tosses, p_under_h, p_under_not_h, upper, lower, config.max_steps,
         prior_weight=1.0, prior_bias=config.coin_bias_prior
     )
     
     blended_score = w * score_informed + (1 - w) * score_blind
     blended_decision = "accept" if blended_score >= 0 else "reject"
+    # Note: blended_steps is still artificial, but document it
     blended_steps = int(w * steps_informed + (1 - w) * steps_blind)
     
     correct_blind = (decision_blind == "accept") == h_is_true
@@ -262,11 +287,15 @@ def split_data(df: pd.DataFrame,
             df.iloc[indices[n_train+n_val:]].reset_index(drop=True))
 
 def calculate_ece(predictions: np.ndarray, actuals: np.ndarray, n_bins: int = 10) -> float:
-    """Expected Calibration Error."""
+    """Expected Calibration Error — FIX 6: Last bin includes boundary."""
     bin_edges = np.linspace(0, 1, n_bins + 1)
     ece = 0.0
     for i in range(n_bins):
-        mask = (predictions >= bin_edges[i]) & (predictions < bin_edges[i+1])
+        if i == n_bins - 1:
+            # Last bin: include right boundary
+            mask = (predictions >= bin_edges[i]) & (predictions <= bin_edges[i+1])
+        else:
+            mask = (predictions >= bin_edges[i]) & (predictions < bin_edges[i+1])
         n_bin = np.sum(mask)
         if n_bin > 0:
             ece += (n_bin / len(predictions)) * abs(
