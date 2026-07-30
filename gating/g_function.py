@@ -16,7 +16,7 @@ import numpy as np
 from typing import Dict, Tuple, Optional, Callable
 from dataclasses import dataclass
 from scipy import stats
-from scipy.stats import roc_auc_score
+from sklearn.metrics import roc_auc_score
 
 
 # =============================================================================
