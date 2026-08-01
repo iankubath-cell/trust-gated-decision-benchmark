@@ -598,3 +598,4 @@ if __name__ == "__main__":
     data_mode=args.data_mode,
     kitti_path=args.kitti_path,
     )
+)
