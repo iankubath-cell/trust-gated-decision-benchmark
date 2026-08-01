@@ -584,7 +584,6 @@ if __name__ == "__main__":
     if abs(total - 1.0) > 0.01:
         raise ValueError(f"Prior quality probabilities must sum to 1.0, got {total:.3f}")
 
-    
     config = SensorBenchmarkConfig(
         n_trials=args.n_trials,
         readings_per_trial=args.readings_per_trial,
@@ -605,4 +604,4 @@ if __name__ == "__main__":
 
     df = run_sensor_benchmark(config)
     df.to_csv(args.output, index=False)
-      print(f"\nResults saved to: {args.output}")
+    print(f"\nResults saved to: {args.output}")
