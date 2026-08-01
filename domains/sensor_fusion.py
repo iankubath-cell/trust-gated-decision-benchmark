@@ -597,4 +597,4 @@ if __name__ == "__main__":
     sprt_beta_range=tuple(args.beta_range),
     data_mode=args.data_mode,
     kitti_path=args.kitti_path,
-)
+    )
