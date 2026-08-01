@@ -585,17 +585,24 @@ if __name__ == "__main__":
         raise ValueError(f"Prior quality probabilities must sum to 1.0, got {total:.3f}")
 
     
-    config = SensorBenchmarkConfig(
-    n_trials=args.n_trials,
-    readings_per_trial=args.readings_per_trial,
-    random_seed=args.seed,
-    obstacle_prob=args.obstacle_prob,
-    aligned_prob=args.aligned_prob,
-    stale_prob=args.stale_prob,
-    adversarial_prob=args.adversarial_prob,
-    sprt_alpha_range=tuple(args.alpha_range),
-    sprt_beta_range=tuple(args.beta_range),
-    data_mode=args.data_mode,
-    kitti_path=args.kitti_path,
+        config = SensorBenchmarkConfig(
+        n_trials=args.n_trials,
+        readings_per_trial=args.readings_per_trial,
+        random_seed=args.seed,
+        obstacle_prob=args.obstacle_prob,
+        aligned_prob=args.aligned_prob,
+        stale_prob=args.stale_prob,
+        adversarial_prob=args.adversarial_prob,
+        sprt_alpha_range=tuple(args.alpha_range),
+        sprt_beta_range=tuple(args.beta_range),
+        data_mode=args.data_mode,
+        kitti_path=args.kitti_path,
     )
-)
+
+    out_dir = os.path.dirname(args.output)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    df = run_sensor_benchmark(config)
+    df.to_csv(args.output, index=False)
+      print(f"\nResults saved to: {args.output}")
