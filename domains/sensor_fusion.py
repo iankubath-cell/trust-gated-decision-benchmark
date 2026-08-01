@@ -585,7 +585,7 @@ if __name__ == "__main__":
         raise ValueError(f"Prior quality probabilities must sum to 1.0, got {total:.3f}")
 
     
-        config = SensorBenchmarkConfig(
+    config = SensorBenchmarkConfig(
         n_trials=args.n_trials,
         readings_per_trial=args.readings_per_trial,
         random_seed=args.seed,
